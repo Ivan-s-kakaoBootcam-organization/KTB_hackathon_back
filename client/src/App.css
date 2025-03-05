@@ -118,6 +118,18 @@ button:hover {
   border-bottom-left-radius: 4px;
 }
 
+.bot-message.loading {
+  background-color: #e8f4f8;
+  border: 1px dashed #3498db;
+  font-style: italic;
+}
+
+.bot-message.error {
+  background-color: #ffe6e6;
+  border: 1px solid #ff8080;
+  color: #d32f2f;
+}
+
 .message-form {
   display: flex;
   padding: 10px;
@@ -137,6 +149,37 @@ button:hover {
 .message-form button {
   padding: 10px 15px;
   margin-top: 0;
+}
+
+.message-links {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dotted #ddd;
+  font-size: 0.9em;
+}
+
+.message-links p {
+  margin: 0 0 5px 0;
+  font-weight: bold;
+  color: #555;
+}
+
+.message-links ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.message-links li {
+  margin-bottom: 5px;
+}
+
+.message-links a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.message-links a:hover {
+  text-decoration: underline;
 }
 
 .finish-button {
@@ -276,6 +319,17 @@ button:hover {
   text-align: center;
   margin: 20px 0;
   font-weight: 500;
+}
+
+/* 오류 메시지 */
+.error-message {
+  color: #d32f2f;
+  background-color: #ffe6e6;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+  text-align: center;
+  font-size: 14px;
 }
 
 /* 반응형 디자인 */

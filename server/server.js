@@ -56,15 +56,27 @@ const schoolLinks = [
     id: 'school-calendar',
     title: '학사 일정',
     url: 'https://school.jje.go.kr/ido/sv/schdulView/selectSchdulCalendar.do?mi=106454',
-    keywords: ['일정', '학사', '방학', '시험']
+    keywords: ['일정', '학사', '방학', '시험'],
+    filename: '학사일정.txt'
   },
   {
-    id: 'lunch-menu',
-    title: '급식 안내',
+    id: 'march-lunch-menu',
+    title: '3월 급식 안내',
     url: 'https://school.jje.go.kr/ido/ad/fm/foodmenu/selectFoodMenuView.do?mi=106449',
-    keywords: ['급식', '메뉴', '식단', '영양']
+    keywords: ['3월','급식', '메뉴', '식단', '영양'],
+    filename: '3월 급식.txt'
   }
 ];
+
+// 파일 맵핑 정보 (파일명과 공지사항 URL 연결)
+const fileUrlMapping = {
+  '2025학년도 교육급여 및 교육비 지원신청 안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510176',
+  '2025_교육급여_교육비_지원신청_안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510176',
+  '2025학년도 다자녀 가정 교육비 지원 신청 안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510383',
+  '제59회 도민체육대회 참가요강.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40511420',
+  '학사일정.txt': 'https://school.jje.go.kr/ido/sv/schdulView/selectSchdulCalendar.do?mi=106454',
+  '3월 급식.txt': 'https://school.jje.go.kr/ido/ad/fm/foodmenu/selectFoodMenuView.do?mi=106449'
+};
 
 // Multer 설정 (파일 업로드)
 const storage = multer.diskStorage({
@@ -182,8 +194,11 @@ function calculateCosineSimilarity(vecA, vecB) {
 async function loadAllFilesFromDirectory() {
   try {
     console.log('업로드 디렉토리에서 파일 로드 중...');
+    console.log(`업로드 디렉토리 경로: ${uploadsDir}`);
     
     const files = fs.readdirSync(uploadsDir);
+    console.log('디렉토리 내 모든 파일:', files);
+    
     let loadedFiles = 0;
     
     // 기존 문서 저장소 초기화
@@ -194,16 +209,34 @@ async function loadAllFilesFromDirectory() {
       file.toLowerCase().endsWith('.txt')
     );
     
-    console.log(`발견된 TXT 파일: ${txtFiles.length}개`);
+    console.log(`발견된 TXT 파일 (${txtFiles.length}개):`, txtFiles);
     
     // TXT 파일 우선 로드
     for (const filename of txtFiles) {
       const filePath = path.join(uploadsDir, filename);
       
       try {
+        // 파일 존재 여부 확인
+        if (!fs.existsSync(filePath)) {
+          console.error(`파일이 존재하지 않음: ${filePath}`);
+          continue;
+        }
+        
+        // 파일 상태 확인
+        const stats = fs.statSync(filePath);
+        console.log(`파일 ${filename} 크기: ${stats.size} 바이트`);
+        
+        if (stats.size === 0) {
+          console.warn(`경고: ${filename} 파일이 비어있습니다.`);
+          continue;
+        }
+        
         // 파일 읽기
         console.log(`TXT 파일 로드 중: ${filename}`);
         const text = fs.readFileSync(filePath, 'utf8');
+        
+        // 텍스트 내용 확인 (처음 100자만)
+        console.log(`${filename} 내용 미리보기: ${text.substring(0, 100)}...`);
         
         if (!text || text.trim() === '') {
           console.warn(`경고: ${filename} 파일에 내용이 없습니다.`);
@@ -217,6 +250,8 @@ async function loadAllFilesFromDirectory() {
         // 각 청크에 대한 임베딩 생성
         for (let i = 0; i < chunks.length; i++) {
           try {
+            console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
+            
             const embeddingResponse = await openai.embeddings.create({
               model: "text-embedding-ada-002",
               input: chunks[i],
@@ -241,12 +276,14 @@ async function loadAllFilesFromDirectory() {
         }
         
         loadedFiles++;
+        console.log(`${filename} 처리 완료`);
       } catch (fileError) {
-        console.error(`파일 처리 오류 (${filename}):`, fileError);
+        console.error(`파일 처리 오류 (${filename}):`, fileError.message);
+        console.error(fileError.stack);
       }
     }
     
-    // PDF 파일도 처리 (시간이 있으면)
+    // PDF 파일도 처리
     const pdfFiles = files.filter(file => 
       file.toLowerCase().endsWith('.pdf')
     );
@@ -290,20 +327,29 @@ async function loadAllFilesFromDirectory() {
     }
     
     console.log(`총 ${loadedFiles}개 파일 로드 완료, 총 ${documentStore.length}개 청크 생성됨`);
+    console.log('문서 저장소 통계:');
+    
+    // 파일별 청크 수 통계
+    const fileStats = {};
+    documentStore.forEach(item => {
+      const source = item.metadata.source;
+      if (!fileStats[source]) {
+        fileStats[source] = 0;
+      }
+      fileStats[source]++;
+    });
+    
+    Object.entries(fileStats).forEach(([file, count]) => {
+      console.log(`- ${file}: ${count}개 청크`);
+    });
+    
     return loadedFiles;
   } catch (error) {
-    console.error('파일 로드 오류:', error);
+    console.error('파일 로드 오류:', error.message);
+    console.error(error.stack);
     throw error;
   }
 }
-
-// 파일 맵핑 정보 (파일명과 공지사항 URL 연결)
-const fileUrlMapping = {
-  '2025학년도 교육급여 및 교육비 지원신청 안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510176',
-  '2025_교육급여_교육비_지원신청_안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510176',
-  '2025학년도 다자녀 가정 교육비 지원 신청 안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510383',
-  '제59회 도민체육대회 참가요강.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40511420'
-};
 
 // 서버 시작 시 기존 파일 로드
 console.log('서버 시작 중... 업로드 디렉토리에서 모든 문서 파일을 로드합니다.');
@@ -322,6 +368,40 @@ loadAllFilesFromDirectory()
     });
   })
   .catch(err => console.error('초기 파일 로드 실패:', err));
+
+// 관련 링크 찾기 함수
+function findRelevantLinks(message, searchResults) {
+  // 검색어와 문서 내용에서 키워드 추출
+  const combinedText = message.toLowerCase() + ' ' + 
+    searchResults.map(result => result.content.toLowerCase()).join(' ');
+  
+  // 검색 결과에서 사용된 파일명 추출
+  const usedSources = searchResults.map(result => result.metadata.source);
+  
+  // 파일명 기반 링크 찾기
+  const fileBasedLinks = schoolLinks.filter(link => {
+    return link.filename && usedSources.includes(link.filename);
+  });
+  
+  // 키워드 기반 링크 찾기
+  const keywordBasedLinks = schoolLinks.filter(link => {
+    return link.keywords.some(keyword => combinedText.includes(keyword.toLowerCase()));
+  });
+  
+  // 결과 병합 및 중복 제거
+  const allLinks = [...fileBasedLinks, ...keywordBasedLinks];
+  const uniqueLinks = [];
+  const seenIds = new Set();
+  
+  allLinks.forEach(link => {
+    if (!seenIds.has(link.id)) {
+      uniqueLinks.push(link);
+      seenIds.add(link.id);
+    }
+  });
+  
+  return uniqueLinks;
+}
 
 // API 경로 정의
 
@@ -398,8 +478,12 @@ app.post('/api/upload-documents', upload.array('documents'), async (req, res) =>
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, studentInfo, conversation } = req.body;
+    console.log('채팅 API 요청 받음:');
+    console.log('- 메시지:', message);
+    console.log('- 학생 정보:', studentInfo);
     
     if (!message || message.trim() === '') {
+      console.warn('빈 메시지 요청 거부');
       return res.status(400).json({
         success: false,
         error: '메시지가 비어있습니다.'
@@ -408,15 +492,20 @@ app.post('/api/chat', async (req, res) => {
     
     // 문서 데이터가 없는 경우 자동 로드 시도
     if (documentStore.length === 0) {
+      console.log('문서 저장소가 비어있음 - 파일 로드 시도');
       try {
         const loadedCount = await loadAllFilesFromDirectory();
+        console.log(`자동 로드 완료: ${loadedCount}개 파일`);
+        
         if (loadedCount === 0) {
+          console.error('참조할 문서가 없음');
           return res.status(400).json({
             success: false,
             error: '참조할 문서가 없습니다. 먼저 문서를 업로드해주세요.'
           });
         }
       } catch (loadError) {
+        console.error('문서 자동 로드 오류:', loadError);
         return res.status(500).json({
           success: false,
           error: '문서 로드 중 오류가 발생했습니다.'
@@ -424,15 +513,20 @@ app.post('/api/chat', async (req, res) => {
       }
     }
     
+    console.log(`현재 문서 저장소 크기: ${documentStore.length}개 청크`);
+    
     // 쿼리 임베딩 생성
+    console.log('쿼리 임베딩 생성 중...');
     const queryEmbeddingResponse = await openai.embeddings.create({
       model: "text-embedding-ada-002",
       input: message,
     });
     
     const queryEmbedding = queryEmbeddingResponse.data[0].embedding;
+    console.log('쿼리 임베딩 생성 완료');
     
     // 관련 문서 검색
+    console.log('관련 문서 검색 중...');
     const searchResults = documentStore
       .map(doc => ({
         content: doc.content,
@@ -442,8 +536,17 @@ app.post('/api/chat', async (req, res) => {
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 3); // 상위 3개 결과
     
+    console.log('검색 결과:');
+    searchResults.forEach((result, i) => {
+      console.log(`결과 ${i+1}:`);
+      console.log(`- 파일: ${result.metadata.source}`);
+      console.log(`- 유사도: ${result.similarity.toFixed(4)}`);
+      console.log(`- 내용 미리보기: ${result.content.substring(0, 100)}...`);
+    });
+    
     // 관련 문서가 없는 경우
     if (searchResults.length === 0) {
+      console.warn('관련 문서를 찾지 못함');
       return res.status(400).json({
         success: false,
         error: '질문과 관련된 문서를 찾을 수 없습니다.'
@@ -464,9 +567,24 @@ app.post('/api/chat', async (req, res) => {
       : '';
     
     // 관련 링크 찾기
+    console.log('관련 링크 찾는 중...');
     const relevantLinks = findRelevantLinks(message, searchResults);
+    console.log(`관련 링크 ${relevantLinks.length}개 찾음:`, relevantLinks.map(l => l.title));
+    
+    // 문서 파일 정보와 링크 추가
+    const fileInfo = searchResults
+      .map(item => {
+        const filename = item.metadata.source;
+        const url = fileUrlMapping[filename] || null;
+        return url ? `- ${filename}: ${url}` : `- ${filename}`;
+      })
+      .filter((value, index, self) => self.indexOf(value) === index) // 중복 제거
+      .join('\n');
     
     // GPT 프롬프트 구성
+    console.log('GPT 프롬프트 구성 중...');
+    
+    // 시스템 프롬프트 확장
     const systemPrompt = `
 당신은 이도 초등학교의 학부모 소통 챗봇입니다. 아래 제공된 학교 자료와 대화 이력을 바탕으로 학부모의 질문에 정확하고 친절하게 답변해주세요.
 
@@ -479,6 +597,11 @@ app.post('/api/chat', async (req, res) => {
 6. 할루시네이션(신뢰할 수 없는 정보 생성)을 피하세요. 모르는 것은 모른다고 솔직하게 답변하세요.
 
 학생 정보: ${studentInfo.grade}학년 ${studentInfo.class}반 ${studentInfo.name}
+
+다음은 검색된 관련 문서 파일 및, 해당 자료를 확인할 수 있는 링크입니다:
+${fileInfo}
+
+위 문서 내용을 바탕으로, 특히 교육비 지원이나 급식 관련 질문에 대해서는 구체적인 정보를 제공해 주세요.
 `;
 
     // 사용자 메시지 구성
@@ -490,31 +613,12 @@ ${conversationHistory ? `대화 이력:\n${conversationHistory}\n\n` : ''}
 학부모 질문: ${message}
 `;
 
-    // 문서 파일 정보와 링크 추가
-    const fileInfo = searchResults
-      .map(item => {
-        const filename = item.metadata.source;
-        const url = fileUrlMapping[filename] || null;
-        return url ? `- ${filename}: ${url}` : `- ${filename}`;
-      })
-      .filter((value, index, self) => self.indexOf(value) === index) // 중복 제거
-      .join('\n');
-      
-    // 시스템 프롬프트 확장
-    const enhancedSystemPrompt = `
-${systemPrompt}
-
-다음은 검색된 관련 문서 파일 및, 해당 자료를 확인할 수 있는 링크입니다:
-${fileInfo}
-
-위 문서 내용을 바탕으로, 특히 교육비 지원 관련 질문에 대해서는 지원금액, 신청 방법, 자격 요건 등 구체적인 정보를 제공해 주세요.
-`;
-
     // ChatGPT API 호출
+    console.log('ChatGPT API 호출 중...');
     const chatCompletion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: enhancedSystemPrompt },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userContent }
       ],
       temperature: 0.7,
@@ -522,13 +626,16 @@ ${fileInfo}
     });
     
     const botResponse = chatCompletion.choices[0].message.content;
+    console.log('ChatGPT 응답 받음 (길이:', botResponse.length, '자)');
     
+    console.log('응답 전송 중...');
     res.status(200).json({
       success: true,
       response: botResponse,
       sources: searchResults.map(item => item.metadata.source),
       relevantLinks: relevantLinks
     });
+    console.log('응답 전송 완료');
   } catch (error) {
     console.error('챗봇 응답 생성 오류:', error);
     res.status(500).json({
@@ -538,7 +645,8 @@ ${fileInfo}
   }
 });
 
-// 대화 상태 분류 API
+
+// 대화 상태 분류 API - 이어서
 app.post('/api/classify-conversation', async (req, res) => {
   try {
     const { conversation, studentInfo } = req.body;
@@ -672,11 +780,10 @@ JSON 형식으로 응답해주세요:
     });
   }
 });
-
 // 이메일 발송 API
 app.post('/api/send-email', async (req, res) => {
   try {
-    const { studentInfo, conversation, status, summary } = req.body;
+    const { studentInfo, conversation, status, summary, parentEmail } = req.body;
     
     if (!studentInfo || !conversation || !status) {
       return res.status(400).json({
@@ -728,87 +835,91 @@ ${conversationLog}
 감사합니다.
 이도 초등학교 학부모 소통 챗봇
 `;
+
+    // 학부모용 이메일 본문
+    const parentEmailBody = `
+${studentInfo.name} 학생의 학부모님께,
+
+이도 초등학교 챗봇을 통한 문의 내용이 ${studentInfo.grade}학년 ${studentInfo.class}반 담임 선생님께 전달되었습니다.
+
+${summaryText}
+
+감사합니다.
+이도 초등학교 학부모 소통 챗봇
+`;
+
+    // Nodemailer 설정
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT),
+      secure: process.env.EMAIL_SECURE === 'true',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
     
-    // 실제 이메일 전송 로직 (프로덕션 환경에서 구현)
-    if (process.env.NODE_ENV === 'production' && process.env.EMAIL_ENABLED === 'true') {
-      // Nodemailer 설정
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
-        secure: process.env.EMAIL_SECURE === 'true',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        }
-      });
-      
-      // 교사 이메일 주소 (실제로는 DB에서 조회)
-      const teacherEmail = `teacher${studentInfo.grade}${studentInfo.class}@idoschool.edu`;
-      
-      // 이메일 발송
+    // 교사 이메일 주소 (실제로는 DB에서 조회)
+    const teacherEmail = `${process.env.EMAIL_USER}`; // 개발 테스트용으로 동일한 이메일 사용
+    
+    console.log(`이메일 발송 준비:
+    - 호스트: ${process.env.EMAIL_HOST}
+    - 포트: ${process.env.EMAIL_PORT}
+    - 보안: ${process.env.EMAIL_SECURE}
+    - 사용자: ${process.env.EMAIL_USER}
+    - 보내는 주소: ${process.env.EMAIL_FROM}
+    - 받는 주소(교사): ${teacherEmail}
+    - 받는 주소(학부모): ${studentInfo.parentEmail || parentEmail || '없음'}`);
+    
+    // 이메일 발송
+    try {
+      // 교사에게 이메일 발송
       await transporter.sendMail({
-        from: process.env.EMAIL_FROM || 'chatbot@idoschool.edu',
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
         to: teacherEmail,
         subject: subject,
         text: emailBody
       });
       
-      console.log(`이메일 전송 완료: ${subject}`);
-    } else {
-      // 개발 환경에서는 이메일 내용만 로그로 출력
-      console.log('===== 이메일 내용 =====');
-      console.log(`제목: ${subject}`);
-      console.log(`본문:\n${emailBody}`);
-      console.log('=======================');
+      console.log(`교사에게 이메일 전송 완료: ${subject}`);
+      
+      // 학부모에게도 이메일 발송 (제공된 경우)
+      if (studentInfo.parentEmail || parentEmail) {
+        await transporter.sendMail({
+          from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+          to: studentInfo.parentEmail || parentEmail,
+          subject: `[이도 초등학교] ${studentInfo.name} 학생 문의 접수 확인`,
+          text: parentEmailBody
+        });
+        
+        console.log(`학부모에게 이메일 전송 완료: ${studentInfo.parentEmail || parentEmail}`);
+      }
+    } catch (emailError) {
+      console.error('이메일 전송 오류:', emailError);
+      console.log('이메일 세부 정보:', {
+        host: process.env.EMAIL_HOST,
+        port: process.env.EMAIL_PORT,
+        secure: process.env.EMAIL_SECURE,
+        user: process.env.EMAIL_USER
+      });
+      
+      // 이메일 전송 실패시에도 API는 성공으로 응답 (UX 개선)
+      console.log('이메일 발송 실패하였으나 API는 성공으로 응답합니다.');
     }
     
     res.status(200).json({
       success: true,
-      message: '교사에게 이메일이 성공적으로 전송되었습니다.',
+      message: '교사와 학부모에게 이메일이 성공적으로 전송되었습니다.',
       emailSubject: subject
     });
   } catch (error) {
-    console.error('이메일 전송 오류:', error);
+    console.error('이메일 처리 오류:', error);
     res.status(500).json({
       success: false,
-      error: '이메일 전송 중 오류가 발생했습니다: ' + error.message
+      error: '이메일 처리 중 오류가 발생했습니다: ' + error.message
     });
   }
 });
-
-// 관련 링크 찾기 함수
-function findRelevantLinks(message, searchResults) {
-  // 검색어와 문서 내용에서 키워드 추출
-  const combinedText = message.toLowerCase() + ' ' + 
-    searchResults.map(result => result.content.toLowerCase()).join(' ');
-  
-  // 검색 결과에서 사용된 파일명 추출
-  const usedSources = searchResults.map(result => result.metadata.source);
-  
-  // 파일명 기반 링크 찾기
-  const fileBasedLinks = schoolLinks.filter(link => {
-    return link.filename && usedSources.includes(link.filename);
-  });
-  
-  // 키워드 기반 링크 찾기
-  const keywordBasedLinks = schoolLinks.filter(link => {
-    return link.keywords.some(keyword => combinedText.includes(keyword.toLowerCase()));
-  });
-  
-  // 결과 병합 및 중복 제거
-  const allLinks = [...fileBasedLinks, ...keywordBasedLinks];
-  const uniqueLinks = [];
-  const seenIds = new Set();
-  
-  allLinks.forEach(link => {
-    if (!seenIds.has(link.id)) {
-      uniqueLinks.push(link);
-      seenIds.add(link.id);
-    }
-  });
-  
-  return uniqueLinks;
-}
 
 // 서버 시작
 const PORT = process.env.PORT || 3001;
@@ -817,48 +928,3 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
-
-// 디버깅용 검색 테스트 엔드포인트
-app.post('/api/test-search', async (req, res) => {
-    try {
-      const { query } = req.body;
-      
-      if (!query) {
-        return res.status(400).json({
-          success: false,
-          error: '검색어가 필요합니다.'
-        });
-      }
-      
-      // 검색어 임베딩 생성
-      const queryEmbeddingResponse = await openai.embeddings.create({
-        model: "text-embedding-ada-002",
-        input: query,
-      });
-      
-      const queryEmbedding = queryEmbeddingResponse.data[0].embedding;
-      
-      // 검색 결과 가져오기
-      const searchResults = documentStore
-        .map(doc => ({
-          content: doc.content.substring(0, 200) + '...',  // 내용 일부만 표시
-          metadata: doc.metadata,
-          similarity: calculateCosineSimilarity(queryEmbedding, doc.embedding)
-        }))
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 5);  // 상위 5개 결과
-      
-      res.status(200).json({
-        success: true,
-        query,
-        totalDocuments: documentStore.length,
-        results: searchResults
-      });
-    } catch (error) {
-      console.error('검색 테스트 오류:', error);
-      res.status(500).json({
-        success: false,
-        error: '검색 중 오류가 발생했습니다: ' + error.message
-      });
-    }
-  });

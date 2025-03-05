@@ -1,5 +1,7 @@
-// App.js
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPaperPlane, faSpinner, faPlusCircle, faChevronDown, faChevronUp, faFileAlt, faExternalLinkAlt, faEnvelope } from '@fortawesome/free-solid-svg-icons';
 import './App.css';
 
 function App() {
@@ -9,6 +11,7 @@ function App() {
     grade: '',
     class: '',
     name: '',
+    parentEmail: '' // 학부모 이메일 추가
   });
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -19,6 +22,8 @@ function App() {
     links: []
   });
   const [showConversation, setShowConversation] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
   // 메시지 목록이 업데이트될 때마다 스크롤을 아래로 이동
@@ -41,8 +46,15 @@ function App() {
   const handleSubmitStudentInfo = (e) => {
     e.preventDefault();
     // 모든 필드가 입력되었는지 확인
-    if (!studentInfo.grade || !studentInfo.class || !studentInfo.name) {
+    if (!studentInfo.grade || !studentInfo.class || !studentInfo.name || !studentInfo.parentEmail) {
       alert('모든 학생 정보를 입력해주세요.');
+      return;
+    }
+    
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(studentInfo.parentEmail)) {
+      alert('유효한 이메일 주소를 입력해주세요.');
       return;
     }
     
@@ -58,173 +70,156 @@ function App() {
       },
     ]);
   };
-// App.js에서 handleSendMessage 함수 수정
-const handleSendMessage = async (e) => {
-  e.preventDefault();
-  if (!newMessage.trim()) return;
 
-  // 새 메시지 추가
-  const userMessage = {
-    id: Date.now(),
-    text: newMessage,
-    sender: 'user',
-  };
+  // 새 메시지 전송 핸들러
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
 
-  setMessages((prev) => [...prev, userMessage]);
-  setNewMessage('');
+    // 새 메시지 추가
+    const userMessage = {
+      id: Date.now(),
+      text: newMessage,
+      sender: 'user',
+    };
 
-  // 로딩 상태 메시지 추가
-  const loadingMessage = {
-    id: Date.now() + 1,
-    text: "답변을 생성 중입니다...",
-    sender: 'bot',
-    isLoading: true
-  };
-  setMessages(prev => [...prev, loadingMessage]);
+    setMessages((prev) => [...prev, userMessage]);
+    setNewMessage('');
+    setIsLoading(true);
+    setError(null);
 
-  try {
-    // 서버에 요청
-    console.log("서버에 요청 보내는 중:", {
-      message: userMessage.text,
-      studentInfo,
-      conversation: messages
-    });
+    // 로딩 메시지 표시
+    const loadingId = Date.now();
+    setMessages((prev) => [...prev, {
+      id: loadingId,
+      text: "답변을 생성 중입니다...",
+      sender: 'bot',
+      isLoading: true
+    }]);
 
-    const response = await fetch('http://localhost:3001/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: userMessage.text,
-        studentInfo,
-        conversation: messages
-      }),
-    });
+    try {
+      // 실제 서버 API 호출
+      const response = await fetch('http://localhost:3001/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: newMessage,
+          studentInfo,
+          conversation: messages
+        }),
+      });
 
-    const data = await response.json();
-    console.log("서버 응답:", data);
+      if (!response.ok) {
+        throw new Error('서버 응답 오류');
+      }
 
-    // 로딩 메시지 제거
-    setMessages(prev => prev.filter(msg => !msg.isLoading));
-
-    // 응답 추가
-    if (data.success !== false) {
+      const data = await response.json();
+      
+      // 로딩 메시지 제거
+      setMessages(prev => prev.filter(msg => msg.id !== loadingId));
+      setIsLoading(false);
+      
+      // 실제 응답 추가
       const botResponse = {
-        id: Date.now() + 2,
+        id: Date.now(),
         text: data.response,
         sender: 'bot',
+        links: data.relevantLinks || []
       };
-      setMessages(prev => [...prev, botResponse]);
-    } else {
-      // 오류 메시지 표시
-      const errorMessage = {
-        id: Date.now() + 2,
-        text: `오류가 발생했습니다: ${data.error || '알 수 없는 오류'}`,
-        sender: 'bot',
-        isError: true
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    }
-  } catch (error) {
-    console.error("API 요청 오류:", error);
-    // 로딩 메시지 제거
-    setMessages(prev => prev.filter(msg => !msg.isLoading));
-    
-    // 오류 메시지 추가
-    const errorMessage = {
-      id: Date.now() + 2,
-      text: "서버 연결에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
-      sender: 'bot',
-      isError: true
-    };
-    setMessages(prev => [...prev, errorMessage]);
-  }
-};
-
-  // 간단한 봇 응답 생성 (실제 RAG 구현은 OpenAI API로 대체)
-  const getBotResponse = (message) => {
-    // 실제 구현에서는 OpenAI API를 호출하여 RAG 시스템으로 응답 생성
-    if (message.includes('가정통신문')) {
-      return '가정통신문은 매주 금요일에 발송됩니다. 최근 가정통신문은 학교 홈페이지에서도 확인하실 수 있습니다.';
-    } else if (message.includes('급식')) {
-      return '급식 메뉴는 학교 홈페이지의 "급식 안내" 메뉴에서 확인하실 수 있습니다.';
-    } else if (message.includes('상담')) {
-      return '선생님과의 상담은 사전 예약이 필요합니다. 원하시는 날짜와 시간을 알려주시면 선생님께 전달하겠습니다.';
-    } else {
-      return '죄송합니다. 말씀하신 내용에 대한 정보가 부족합니다. 선생님께 직접 전달하도록 하겠습니다.';
+      
+      setMessages((prev) => [...prev, botResponse]);
+    } catch (error) {
+      console.error('API 오류:', error);
+      setIsLoading(false);
+      setError("응답 생성 중 오류가 발생했습니다.");
+      
+      // 오류 발생 시 로딩 메시지를 오류 메시지로 교체
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === loadingId 
+            ? { 
+                ...msg, 
+                text: "서버 연결에 문제가 있어 응답을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.", 
+                isLoading: false, 
+                isError: true 
+              }
+            : msg
+        )
+      );
     }
   };
 
   // 채팅 완료 핸들러
   const handleFinishChat = async () => {
-    // 간단한 분류 로직 (실제로는 더 복잡한 AI 분류 사용)
-    let status = '[확인 부탁]'; // 기본값
-    
-    const allText = messages.map(m => m.text).join(' ').toLowerCase();
-    
-    if (allText.includes('상담') || allText.includes('면담')) {
-      status = '[확인 부탁]';
-    } else if (allText.includes('감사') || allText.includes('해결')) {
-      status = '[해결]';
-    } else if (allText.includes('문제') || allText.includes('불만')) {
-      status = '[미해결]';
+    setIsLoading(true);
+
+    try {
+      // 대화 내용 분류 API 호출
+      const classifyResponse = await fetch('http://localhost:3001/api/classify-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversation: messages,
+          studentInfo
+        }),
+      });
+
+      if (!classifyResponse.ok) {
+        throw new Error('대화 분류 오류');
+      }
+
+      const classifyData = await classifyResponse.json();
+      setEmailStatus(classifyData.status);
+
+      // 대화 요약 API 호출
+      const summaryResponse = await fetch('http://localhost:3001/api/summarize-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversation: messages,
+          studentInfo
+        }),
+      });
+
+      if (!summaryResponse.ok) {
+        throw new Error('대화 요약 오류');
+      }
+
+      const summaryData = await summaryResponse.json();
+      setConversationSummary(summaryData.summary);
+
+      // 이메일 발송 API 호출
+      await fetch('http://localhost:3001/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversation: messages,
+          studentInfo,
+          status: classifyData.status,
+          summary: summaryData.summary,
+          parentEmail: studentInfo.parentEmail // 학부모 이메일 전달
+        }),
+      });
+
+      setIsLoading(false);
+      setStep(3);
+    } catch (error) {
+      console.error('API 오류:', error);
+      setIsLoading(false);
+      setError('요약 및 이메일 처리 중 오류가 발생했습니다.');
+      
+      // 오류 상황에서도 기본 상태 설정하고 진행
+      if (!emailStatus) setEmailStatus('[확인 부탁]');
+      setStep(3);
     }
-    
-    setEmailStatus(status);
-    
-    // 대화 내용 요약 생성 (실제로는 서버 API를 호출)
-    // 여기서는 간단한 예시로 구현
-    const generateSummary = () => {
-      // 실제 구현에서는 서버에 API 요청
-      
-      // 대화 주제 추출
-      let topic = '일반 문의';
-      if (allText.includes('교육비') || allText.includes('지원')) {
-        topic = '교육비 지원 문의';
-      } else if (allText.includes('체육') || allText.includes('대회')) {
-        topic = '도민체육대회 관련 문의';
-      } else if (allText.includes('일정') || allText.includes('행사')) {
-        topic = '학교 일정 문의';
-      }
-      
-      // 키포인트 추출 (실제로는 AI가 분석)
-      const keyPoints = [];
-      if (allText.includes('신청')) keyPoints.push('교육비 지원 신청 방법 문의');
-      if (allText.includes('기간')) keyPoints.push('신청 기간 문의');
-      if (allText.includes('서류')) keyPoints.push('필요 서류 문의');
-      if (allText.includes('자격')) keyPoints.push('지원 자격 문의');
-      
-      // 링크 추천 (실제로는 문서 분석 기반으로 제공)
-      const links = [];
-      if (topic === '교육비 지원 문의') {
-        links.push({
-          title: '교육비 지원 안내 페이지',
-          url: 'https://www.ido.school.edu/support'
-        });
-      } else if (topic === '도민체육대회 관련 문의') {
-        links.push({
-          title: '제59회 도민체육대회 안내',
-          url: 'https://www.ido.school.edu/sports'
-        });
-      }
-      
-      // 키포인트가 없으면 기본값 설정
-      if (keyPoints.length === 0) {
-        keyPoints.push('학부모님의 질문에 대한 정보 제공');
-        keyPoints.push('필요시 담임교사의 추가 확인 필요');
-      }
-      
-      return {
-        topic,
-        keyPoints,
-        links
-      };
-    };
-    
-    const summary = generateSummary();
-    setConversationSummary(summary);
-    setStep(3);
   };
 
   // 처음으로 돌아가기
@@ -234,10 +229,19 @@ const handleSendMessage = async (e) => {
       grade: '',
       class: '',
       name: '',
+      parentEmail: '',
     });
     setMessages([]);
     setNewMessage('');
     setEmailStatus('');
+    setConversationSummary({
+      topic: '',
+      keyPoints: ['문의 내용을 분석 중입니다...'],
+      links: []
+    });
+    setShowConversation(false);
+    setIsLoading(false);
+    setError(null);
   };
 
   return (
@@ -297,6 +301,18 @@ const handleSendMessage = async (e) => {
                 />
               </div>
 
+              <div className="form-group">
+                <label>학부모 이메일</label>
+                <input
+                  type="email"
+                  name="parentEmail"
+                  value={studentInfo.parentEmail}
+                  onChange={handleStudentInfoChange}
+                  placeholder="이메일 주소를 입력하세요"
+                  required
+                />
+              </div>
+
               <button type="submit">채팅 시작하기</button>
             </form>
           </div>
@@ -314,9 +330,23 @@ const handleSendMessage = async (e) => {
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`message ${message.sender === 'user' ? 'user-message' : 'bot-message'}`}
+                  className={`message ${message.sender === 'user' ? 'user-message' : 'bot-message'} ${message.isLoading ? 'loading' : ''} ${message.isError ? 'error' : ''}`}
                 >
                   {message.text}
+                  {message.links && message.links.length > 0 && (
+                    <div className="message-links">
+                      <p>관련 링크:</p>
+                      <ul>
+                        {message.links.map((link, index) => (
+                          <li key={index}>
+                            <a href={link.url} target="_blank" rel="noopener noreferrer">
+                              {link.title}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -328,13 +358,20 @@ const handleSendMessage = async (e) => {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="메시지를 입력하세요..."
+                disabled={isLoading}
               />
-              <button type="submit">전송</button>
+              <button type="submit" disabled={isLoading}>전송</button>
             </form>
 
-            <button onClick={handleFinishChat} className="finish-button">
-              채팅 완료
+            <button 
+              onClick={handleFinishChat} 
+              className="finish-button"
+              disabled={isLoading || messages.length < 3}
+            >
+              {isLoading ? '처리 중...' : '채팅 완료'}
             </button>
+            
+            {error && <p className="error-message">{error}</p>}
           </div>
         )}
 
@@ -398,8 +435,8 @@ const handleSendMessage = async (e) => {
               </div>
             </div>
             <p className="email-sent">
-              위 내용이 {studentInfo.grade}학년 {studentInfo.class}반 담임 선생님께 
-              {emailStatus} 태그와 함께 이메일로 전송되었습니다.
+              위 내용이 {studentInfo.grade}학년 {studentInfo.class}반 담임 선생님과 
+              학부모님({studentInfo.parentEmail})께 {emailStatus} 태그와 함께 이메일로 전송되었습니다.
             </p>
             <button onClick={handleRestart}>처음으로 돌아가기</button>
           </div>
