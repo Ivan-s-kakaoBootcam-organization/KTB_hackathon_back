@@ -1,0 +1,40 @@
+# dependencies
+/client/node_modules
+/server/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.vscode/
+.idea/
+
+# 로그 파일들
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python 가상 환경 폴더
+/pdftotxt/.venv/
+/pdftotxt/venv/
+
+# 환경 변수 파일
+server/.env
+
+# 빌드 및 배포 파일
+*.log
+dist/
+build/
+
+# 업로드된 파일 제외
+server/uploads/
