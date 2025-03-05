@@ -38,3 +38,6 @@ build/
 
 # 업로드된 파일 제외
 server/uploads/
+/server/node_modules
+/pdftotxt/venv
+/client/node_modules
