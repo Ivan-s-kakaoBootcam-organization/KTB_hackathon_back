@@ -273,6 +273,7 @@ async function loadAllFilesFromDirectory() {
         console.log(`${filename}: ${chunks.length}개 청크로 분할됨`);
         
         // 각 청크에 대한 임베딩 생성
+        //test
         for (let i = 0; i < chunks.length; i++) {
           try {
             console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
@@ -702,7 +703,7 @@ const systemPrompt = `
 - 개인정보 보호와 프라이버시 존중
 - 감정에 공감하고 적극적으로 경청
 
-오늘 날짜: 2024년 3월 7일
+오늘 날짜: 2025년 3월 7일
 
 공식 소통 채널 안내:
 1. 중요한 개인적 문의는 학교 공식 연락처나 담임 교사 면담을 통해 논의할 것을 권장합니다.
@@ -967,18 +968,18 @@ const saveConversationToMD = async (studentInfo, conversation, status, requestTy
       if (msg.images && Array.isArray(msg.images) && msg.images.length > 0) {
         mdContent += `**첨부 이미지:**\n\n`;
         
-        for (const [imgIndex, image] of msg.images.entries()) {
-          const imgFileName = `${studentInfo.grade}학년_${studentInfo.class}반_${studentInfo.name}_${timestamp}_msg${index}_img${imgIndex}${getImageExtension(image)}`;
-          try {
-            const savedPath = await saveImage(image, imgFileName);
-            if (savedPath) {
-              mdContent += `![이미지 ${imgIndex + 1}](../images/${imgFileName})\n\n`;
-              savedImages.push({ path: savedPath, name: imgFileName });
-            }
-          } catch (imgError) {
-            console.warn(`이미지 저장 실패 (${imgFileName}):`, imgError);
-          }
-        }
+        // for (const [imgIndex, image] of msg.images.entries()) {
+        //   const imgFileName = `${studentInfo.grade}학년_${studentInfo.class}반_${studentInfo.name}_${timestamp}_msg${index}_img${imgIndex}${getImageExtension(image)}`;
+        //   try {
+        //     const savedPath = await saveImage(image, imgFileName);
+        //     if (savedPath) {
+        //       mdContent += `![이미지 ${imgIndex + 1}](../images/${imgFileName})\n\n`;
+        //       savedImages.push({ path: savedPath, name: imgFileName });
+        //     }
+        //   } catch (imgError) {
+        //     console.warn(`이미지 저장 실패 (${imgFileName}):`, imgError);
+        //   }
+        // }
       }
     }
 
@@ -1147,14 +1148,27 @@ ${parsedSummary.keyPoints.map(point => `- ${point}`).join('\n')}
     }
 
     // 이미지 첨부
-    if (savedConversation && savedConversation.savedImages) {
-      savedConversation.savedImages.forEach(img => {
-        mailOptions.attachments.push({
-          filename: path.basename(img.path),
-          path: img.path
-        });
-      });
-    }
+  const imagePaths = req.files && req.files.length > 0 ? req.files.map(file => ({
+    filename: file.originalname,
+    path: file.path
+  })) : [];
+
+  console.log("imagePaths:", imagePaths);
+
+  // 📌 파일이 있을 경우만 attachments에 추가
+  if (imagePaths.length > 0) {
+    mailOptions.attachments.push(...imagePaths);
+  }
+
+      
+    // if (savedConversation && savedConversation.savedImages) {
+    //   savedConversation.savedImages.forEach(img => {
+    //     mailOptions.attachments.push({
+    //       filename: path.basename(img.path),
+    //       path: img.path
+    //     });
+    //   });
+    // }
 
     // 이메일 발송
     try {
