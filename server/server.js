@@ -947,7 +947,7 @@ const saveConversationToMD = async (studentInfo, conversation, status, requestTy
     mdContent += `## 학생 정보\n\n`;
     mdContent += `- 학년/반: ${studentInfo.grade}학년 ${studentInfo.class}반\n`;
     mdContent += `- 학생 이름: ${studentInfo.name}\n`;
-    mdContent += `- 학부모 이메일: ${studentInfo.parentEmail || '정보 없음'}\n\n`;
+    mdContent += `- 선생님 이메일: ${studentInfo.teacherEmail || '정보 없음'}\n\n`;
     
     mdContent += `## 상담 정보\n\n`;
     mdContent += `- 상담 일시: ${new Date().toLocaleString('ko-KR')}\n`;
@@ -1066,7 +1066,7 @@ const saveImage = async (image, fileName) => {
  *               summary:
  *                 type: string
  *                 description: JSON string containing conversation summary (topic, keyPoints) ex) {"topic":"topic", "keyPoints": ["keyPoints1", "keyPoints2"]}
- *               parentEmail:
+ *               teacherEmail:
  *                 type: string
  *                 description: Parent's email address (optional)
  *               images:
@@ -1100,7 +1100,7 @@ const saveImage = async (image, fileName) => {
  */
 app.post('/api/send-email', upload.array('images', 10), async (req, res) => {
   try {
-    const { studentInfo, conversation, status, requestType, summary, parentEmail } = req.body;
+    const { studentInfo, conversation, status, requestType, summary, teacherEmail } = req.body;
     const parsedStudentInfo = JSON.parse(studentInfo);
     const parsedConversation = JSON.parse(conversation);
     const parsedSummary = JSON.parse(summary);
@@ -1132,7 +1132,7 @@ ${parsedSummary.keyPoints.map(point => `- ${point}`).join('\n')}
     const mailOptions = {
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: process.env.EMAIL_USER,
-      cc: parentEmail,
+      cc: teacherEmail,
       subject: `[이도초등학교] ${parsedStudentInfo.grade}학년 ${parsedStudentInfo.class}반 ${parsedStudentInfo.name} 학부모님 문의(${status})(${requestType})`,
       text: emailBody,
       attachments: []
