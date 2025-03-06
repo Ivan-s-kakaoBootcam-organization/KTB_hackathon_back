@@ -274,32 +274,32 @@ async function loadAllFilesFromDirectory() {
         
         // 각 청크에 대한 임베딩 생성
         //test
-        for (let i = 0; i < chunks.length; i++) {
-          try {
-            console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
+        // for (let i = 0; i < chunks.length; i++) {
+        //   try {
+        //     console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
             
-            const embeddingResponse = await openai.embeddings.create({
-              model: "text-embedding-ada-002",
-              input: chunks[i],
-            });
+        //     const embeddingResponse = await openai.embeddings.create({
+        //       model: "text-embedding-ada-002",
+        //       input: chunks[i],
+        //     });
             
-            // 문서 저장소에 저장
-            documentStore.push({
-              content: chunks[i],
-              embedding: embeddingResponse.data[0].embedding,
-              metadata: {
-                source: filename,
-                chunkIndex: i,
-                totalChunks: chunks.length,
-                fileType: 'txt'
-              }
-            });
+        //     // 문서 저장소에 저장
+        //     documentStore.push({
+        //       content: chunks[i],
+        //       embedding: embeddingResponse.data[0].embedding,
+        //       metadata: {
+        //         source: filename,
+        //         chunkIndex: i,
+        //         totalChunks: chunks.length,
+        //         fileType: 'txt'
+        //       }
+        //     });
             
-            console.log(`${filename} 청크 ${i+1}/${chunks.length} 임베딩 완료`);
-          } catch (embeddingError) {
-            console.error(`청크 임베딩 오류 (${filename}, 청크 ${i}):`, embeddingError);
-          }
-        }
+        //     console.log(`${filename} 청크 ${i+1}/${chunks.length} 임베딩 완료`);
+        //   } catch (embeddingError) {
+        //     console.error(`청크 임베딩 오류 (${filename}, 청크 ${i}):`, embeddingError);
+        //   }
+        // }
         
         loadedFiles++;
         console.log(`${filename} 처리 완료`);
@@ -429,6 +429,32 @@ function findRelevantLinks(message, searchResults) {
   return uniqueLinks;
 }
 
+// 언어 감지 함수
+const detectLanguage = async (text) => {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are a language detector. Respond with only the language code (ko, en, ja, zh) of the input text."
+        },
+        {
+          role: "user",
+          content: text
+        }
+      ],
+      temperature: 0,
+      max_tokens: 2
+    });
+    
+    return response.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('언어 감지 오류:', error);
+    return 'ko'; // 기본값으로 한국어 반환
+  }
+};
+
 // API 경로 정의
 // 채팅 응답 생성 API
 /**
@@ -506,6 +532,10 @@ app.post('/api/chat', async (req, res) => {
     console.log('채팅 API 요청 받음:');
     console.log('- 메시지:', message);
     console.log('- 학생 정보:', studentInfo);
+    
+    // 입력 언어 감지 추가
+    const detectedLanguage = await detectLanguage(message);
+    console.log('감지된 언어:', detectedLanguage);
     
     // 여기에 아래 코드 추가
     console.log('- 이전 대화 개수:', conversation ? conversation.length : 0);
@@ -725,6 +755,8 @@ ${fileInfo}
 3월 급식과 학사일정은 임베딩 된 텍스트 파일에서 확인할 수 있습니다. 
 
 관련 링크가 있는 경우에만 링크를 제공하고, 없는 경우 링크는 언급하지 마세요.
+
+Please respond in ${detectedLanguage} language.
 `;
 
 // 사용자 메시지 구성
@@ -736,6 +768,39 @@ ${conversationHistory ? `대화 이력:\n${conversationHistory}\n\n` : ''}
 학부모 질문: ${message}
 `;
 
+      // 챗봇 응답 생성 부분 수정
+    if (detectedLanguage !== 'ko') {
+      // 한국어 응답
+      const koreanResponse = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...conversation.map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.text
+          })),
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      });
+
+      // 외국어 응답 (간단한 번역)
+      const foreignResponse = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { 
+            role: "system", 
+            content: `You are a translator. Provide a brief and concise translation of the following response in ${detectedLanguage} language.` 
+          },
+          { role: "user", content: koreanResponse.choices[0].message.content }
+        ],
+        temperature: 0.7,
+        max_tokens: 250  // 번역은 더 짧게
+      });
+
+      botResponse = `${koreanResponse.choices[0].message.content}\n\n---\n${foreignResponse.choices[0].message.content}`;
+    } else {
     // ChatGPT API 호출
     console.log('ChatGPT API 호출 중...');
     const chatCompletion = await openai.chat.completions.create({
@@ -752,6 +817,7 @@ ${conversationHistory ? `대화 이력:\n${conversationHistory}\n\n` : ''}
     console.log('ChatGPT 응답 받음 (길이:', botResponse.length, '자)');
     
     console.log('응답 전송 중...');
+  }
     res.status(200).json({
       success: true,
       response: botResponse,
