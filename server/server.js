@@ -109,16 +109,24 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    // PDF와 TXT 파일만 허용
-    if (file.mimetype === 'application/pdf' || 
-        file.mimetype === 'text/plain' || 
-        file.originalname.toLowerCase().endsWith('.txt')) {
+    // 허용할 MIME 타입 목록
+    const allowedMimeTypes = [
+      'application/pdf', 
+      'text/plain', 
+      'image/jpeg', 
+      'image/png', 
+      'image/gif', 
+      'image/webp'
+    ];
+
+    if (allowedMimeTypes.includes(file.mimetype) || file.originalname.toLowerCase().endsWith('.txt')) {
       cb(null, true);
     } else {
-      cb(new Error('PDF 또는 TXT 파일만 업로드 가능합니다.'));
+      cb(new Error('PDF, TXT, 또는 이미지(JPG, PNG, GIF, WEBP) 파일만 업로드 가능합니다.'));
     }
   }
 });
+
 
 // 문서 텍스트 추출 함수 (파일 유형에 따라 다른 처리)
 async function extractTextFromFile(filePath) {
@@ -1045,10 +1053,10 @@ const saveImage = async (image, fileName) => {
  *             properties:
  *               studentInfo:
  *                 type: string
- *                 description: JSON string containing student details (grade, class, name)
+ *                 description: JSON string containing student details (grade, class, name) ex) { "grade": 3, "class": 2, "name": "김철수" }
  *               conversation:
  *                 type: string
- *                 description: JSON string containing conversation history
+ *                 description: JSON string containing conversation history ex) [{ "sender": "user", "text": "오늘 울 애기 점심 메뉴는 뭔가요?" }, { "sender": "user", "text": "근데 저희 집은 급식비 낼 돈이 없어요ㅠㅠ" }]
  *               status:
  *                 type: string
  *                 description: Inquiry status ([해결], [미해결], [확인 부탁])
@@ -1057,7 +1065,7 @@ const saveImage = async (image, fileName) => {
  *                 description: Type of request made by the parent ([면담 요청], [전화 상담 요청], [문제 해결])
  *               summary:
  *                 type: string
- *                 description: JSON string containing conversation summary (topic, key points)
+ *                 description: JSON string containing conversation summary (topic, keyPoints) ex) {"topic":"topic", "keyPoints": ["keyPoints1", "keyPoints2"]}
  *               parentEmail:
  *                 type: string
  *                 description: Parent's email address (optional)
@@ -1066,7 +1074,7 @@ const saveImage = async (image, fileName) => {
  *                 items:
  *                   type: string
  *                   format: binary
- *                 description: Images related to the inquiry (optional)
+ *                 description: Images related to the inquiry (optional) (max 10 images)
  *     responses:
  *       200:
  *         description: Email successfully sent
