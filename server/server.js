@@ -1146,7 +1146,7 @@ ${parsedSummary.keyPoints.map(point => `- ${point}`).join('\n')}
         path: savedConversation.filePath
       });
     }
-
+ 
     // 이미지 첨부
   const imagePaths = req.files && req.files.length > 0 ? req.files.map(file => ({
     filename: file.originalname,
