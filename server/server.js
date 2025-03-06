@@ -713,6 +713,7 @@ const systemPrompt = `
 ${fileInfo}
 
 위 문서 내용을 바탕으로, 특히 교육비 지원이나 급식 관련 질문에 대해서는 구체적인 정보를 제공해 주세요.
+3월 급식과 학사일정은 임베딩 된 텍스트 파일에서 확인할 수 있습니다. 
 
 관련 링크가 있는 경우에만 링크를 제공하고, 없는 경우 링크는 언급하지 마세요.
 `;
@@ -1053,7 +1054,7 @@ const saveImage = async (image, fileName) => {
  *                 description: Inquiry status ([해결], [미해결], [확인 부탁])
  *               requestType:
  *                 type: string
- *                 description: Type of request made by the parent
+ *                 description: Type of request made by the parent ([면담 요청], [전화 상담 요청], [문제 해결])
  *               summary:
  *                 type: string
  *                 description: JSON string containing conversation summary (topic, key points)
