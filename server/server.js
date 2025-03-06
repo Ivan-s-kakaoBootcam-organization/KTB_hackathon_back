@@ -1,6 +1,7 @@
 // server.js
 require('dotenv').config();
 const express = require('express');
+const setupSwagger = require("./swagger"); // Swagger 설정 가져오기
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
@@ -14,6 +15,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Swagger 설정 적용
+setupSwagger(app);
 
 // OpenAI API 초기화
 const openai = new OpenAI({
