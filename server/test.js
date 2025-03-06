@@ -274,32 +274,32 @@ async function loadAllFilesFromDirectory() {
         
         // 각 청크에 대한 임베딩 생성
         //test
-        for (let i = 0; i < chunks.length; i++) {
-          try {
-            console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
+        // for (let i = 0; i < chunks.length; i++) {
+        //   try {
+        //     console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
             
-            const embeddingResponse = await openai.embeddings.create({
-              model: "text-embedding-ada-002",
-              input: chunks[i],
-            });
+        //     const embeddingResponse = await openai.embeddings.create({
+        //       model: "text-embedding-ada-002",
+        //       input: chunks[i],
+        //     });
             
-            // 문서 저장소에 저장
-            documentStore.push({
-              content: chunks[i],
-              embedding: embeddingResponse.data[0].embedding,
-              metadata: {
-                source: filename,
-                chunkIndex: i,
-                totalChunks: chunks.length,
-                fileType: 'txt'
-              }
-            });
+        //     // 문서 저장소에 저장
+        //     documentStore.push({
+        //       content: chunks[i],
+        //       embedding: embeddingResponse.data[0].embedding,
+        //       metadata: {
+        //         source: filename,
+        //         chunkIndex: i,
+        //         totalChunks: chunks.length,
+        //         fileType: 'txt'
+        //       }
+        //     });
             
-            console.log(`${filename} 청크 ${i+1}/${chunks.length} 임베딩 완료`);
-          } catch (embeddingError) {
-            console.error(`청크 임베딩 오류 (${filename}, 청크 ${i}):`, embeddingError);
-          }
-        }
+        //     console.log(`${filename} 청크 ${i+1}/${chunks.length} 임베딩 완료`);
+        //   } catch (embeddingError) {
+        //     console.error(`청크 임베딩 오류 (${filename}, 청크 ${i}):`, embeddingError);
+        //   }
+        // }
         
         loadedFiles++;
         console.log(`${filename} 처리 완료`);
@@ -528,16 +528,15 @@ const detectLanguage = async (text) => {
  */
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, studentInfo} = req.body;
-    const conversation = [];
+    const { message, studentInfo, conversation } = req.body;
     console.log('채팅 API 요청 받음:');
     console.log('- 메시지:', message);
     console.log('- 학생 정보:', studentInfo);
-    
+
     // 입력 언어 감지 추가
     const detectedLanguage = await detectLanguage(message);
     console.log('감지된 언어:', detectedLanguage);
-
+    
     // 여기에 아래 코드 추가
     console.log('- 이전 대화 개수:', conversation ? conversation.length : 0);
     
@@ -769,7 +768,7 @@ ${conversationHistory ? `대화 이력:\n${conversationHistory}\n\n` : ''}
 학부모 질문: ${message}
 `;
 
-    // 챗봇 응답 생성 부분 수정
+      // 챗봇 응답 생성 부분 수정
     if (detectedLanguage !== 'ko') {
       // 한국어 응답
       const koreanResponse = await openai.chat.completions.create({
