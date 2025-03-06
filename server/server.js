@@ -1,7 +1,6 @@
 // server.js
 require('dotenv').config();
 const express = require('express');
-const setupSwagger = require("./swagger"); // Swagger 설정 가져오기
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
@@ -9,15 +8,15 @@ const fs = require('fs');
 const { OpenAI } = require('openai');
 const pdf = require('pdf-parse');
 const nodemailer = require('nodemailer');
+const sharp = require('sharp');
+const { v4: uuidv4 } = require('uuid');
+const mime = require('mime-types');
 
 // Express 앱 초기화
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Swagger 설정 적용
-setupSwagger(app);
 
 // OpenAI API 초기화
 const openai = new OpenAI({
@@ -85,7 +84,7 @@ const fileUrlMapping = {
   '2025학년도 교육급여 및 교육비 지원신청 안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510176',
   '2025_교육급여_교육비_지원신청_안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510176',
   '2025학년도 다자녀 가정 교육비 지원 신청 안내.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40510383',
-  '제59회 도민체육대회 참가요강.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&bbsId=110855&nttSn=40511420',
+  '제59회 도민체육대회 참가요강.txt': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&nttSn=40511420',
   '학사일정.txt': 'https://school.jje.go.kr/ido/sv/schdulView/selectSchdulCalendar.do?mi=106454',
   '3월 급식.txt': 'https://school.jje.go.kr/ido/ad/fm/foodmenu/selectFoodMenuView.do?mi=106449',
   
@@ -95,38 +94,32 @@ const fileUrlMapping = {
   '제59회 도민체육대회 참가요강.pdf': 'https://school.jje.go.kr/ido/na/ntt/selectNttInfo.do?mi=106429&nttSn=40511420'
 };
 
-// Multer 설정 (파일 업로드)
+// Multer 설정 수정
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadsDir);
+    // 이미지는 IMAGES_DIR에 저장
+    cb(null, IMAGES_DIR);
   },
   filename: (req, file, cb) => {
-    // 원본 파일명 유지
-    cb(null, file.originalname);
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `image_${timestamp}${ext}`);
   }
 });
 
 const upload = multer({
   storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB 제한
+  },
   fileFilter: (req, file, cb) => {
-    // 허용할 MIME 타입 목록
-    const allowedMimeTypes = [
-      'application/pdf', 
-      'text/plain', 
-      'image/jpeg', 
-      'image/png', 
-      'image/gif', 
-      'image/webp'
-    ];
-
-    if (allowedMimeTypes.includes(file.mimetype) || file.originalname.toLowerCase().endsWith('.txt')) {
+    if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('PDF, TXT, 또는 이미지(JPG, PNG, GIF, WEBP) 파일만 업로드 가능합니다.'));
+      cb(new Error('이미지 파일만 업로드 가능합니다.'));
     }
   }
 });
-
 
 // 문서 텍스트 추출 함수 (파일 유형에 따라 다른 처리)
 async function extractTextFromFile(filePath) {
@@ -273,10 +266,16 @@ async function loadAllFilesFromDirectory() {
         console.log(`${filename}: ${chunks.length}개 청크로 분할됨`);
         
         // 각 청크에 대한 임베딩 생성
+<<<<<<< HEAD
         //test
         // for (let i = 0; i < chunks.length; i++) {
         //   try {
         //     console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
+=======
+        for (let i = 0; i < chunks.length; i++) {
+          try {
+            console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
+>>>>>>> mmvp_back
             
         //     const embeddingResponse = await openai.embeddings.create({
         //       model: "text-embedding-ada-002",
@@ -455,6 +454,7 @@ const detectLanguage = async (text) => {
   }
 };
 
+<<<<<<< HEAD
 // API 경로 정의
 // 채팅 응답 생성 API
 /**
@@ -526,6 +526,9 @@ const detectLanguage = async (text) => {
  *       500:
  *         description: Internal server error
  */
+=======
+// 챗봇 응답 생성 API 수정
+>>>>>>> mmvp_back
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, studentInfo, conversation } = req.body;
@@ -555,28 +558,10 @@ app.post('/api/chat', async (req, res) => {
         error: '메시지가 비어있습니다.'
       });
     }
-    
-    // 문서 데이터가 없는 경우 자동 로드 시도
+
+    // 문서 데이터 확인 및 로드
     if (documentStore.length === 0) {
-      console.log('문서 저장소가 비어있음 - 파일 로드 시도');
-      try {
-        const loadedCount = await loadAllFilesFromDirectory();
-        console.log(`자동 로드 완료: ${loadedCount}개 파일`);
-        
-        if (loadedCount === 0) {
-          console.error('참조할 문서가 없음');
-          return res.status(400).json({
-            success: false,
-            error: '참조할 문서가 없습니다. 먼저 문서를 업로드해주세요.'
-          });
-        }
-      } catch (loadError) {
-        console.error('문서 자동 로드 오류:', loadError);
-        return res.status(500).json({
-          success: false,
-          error: '문서 로드 중 오류가 발생했습니다.'
-        });
-      }
+      await loadAllFilesFromDirectory();
     }
     
     console.log(`현재 문서 저장소 크기: ${documentStore.length}개 청크`);
@@ -704,7 +689,7 @@ const systemPrompt = `
 다양성 존중 대응 지침:
 
 1. 다문화 가정 대응 원칙
-- 언어적 장벽을 고려한 소통
+- 언어적 장벽을 고려한 소통(언어를 감지하여 해당 언어로 번역된 응답 재제공)
 - 필요시 통역 서비스 안내
 - 문화적 차이에 대한 존중과 이해
 - 다국어 자료 제공 고려
@@ -733,7 +718,7 @@ const systemPrompt = `
 - 개인정보 보호와 프라이버시 존중
 - 감정에 공감하고 적극적으로 경청
 
-오늘 날짜: 2025년 3월 7일
+오늘 날짜: 2024년 3월 7일
 
 공식 소통 채널 안내:
 1. 중요한 개인적 문의는 학교 공식 연락처나 담임 교사 면담을 통해 논의할 것을 권장합니다.
@@ -752,15 +737,14 @@ const systemPrompt = `
 ${fileInfo}
 
 위 문서 내용을 바탕으로, 특히 교육비 지원이나 급식 관련 질문에 대해서는 구체적인 정보를 제공해 주세요.
-3월 급식과 학사일정은 임베딩 된 텍스트 파일에서 확인할 수 있습니다. 
 
 관련 링크가 있는 경우에만 링크를 제공하고, 없는 경우 링크는 언급하지 마세요.
 
 Please respond in ${detectedLanguage} language.
 `;
 
-// 사용자 메시지 구성
-const userContent = `
+    // 사용자 메시지 구성
+    const userContent = `
 관련 학교 자료:
 ${context}
 
@@ -768,7 +752,11 @@ ${conversationHistory ? `대화 이력:\n${conversationHistory}\n\n` : ''}
 학부모 질문: ${message}
 `;
 
+<<<<<<< HEAD
       // 챗봇 응답 생성 부분 수정
+=======
+    // 챗봇 응답 생성 부분 수정
+>>>>>>> mmvp_back
     if (detectedLanguage !== 'ko') {
       // 한국어 응답
       const koreanResponse = await openai.chat.completions.create({
@@ -801,30 +789,68 @@ ${conversationHistory ? `대화 이력:\n${conversationHistory}\n\n` : ''}
 
       botResponse = `${koreanResponse.choices[0].message.content}\n\n---\n${foreignResponse.choices[0].message.content}`;
     } else {
-    // ChatGPT API 호출
-    console.log('ChatGPT API 호출 중...');
-    const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent }
-      ],
-      temperature: 0.7,
-      max_tokens: 500
-    });
-    
-    const botResponse = chatCompletion.choices[0].message.content;
-    console.log('ChatGPT 응답 받음 (길이:', botResponse.length, '자)');
-    
-    console.log('응답 전송 중...');
+// ChatGPT API 호출 (다국어 처리 포함)
+console.log('ChatGPT API 호출 중...');
+
+let chatCompletion;
+
+if (language === 'ko') {
+  chatCompletion = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...conversation.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.content  // ⭐ 반드시 추가 필요
+      }))
+    ],
+    temperature: 0.7,
+    max_tokens: 500
+  });
+} else {
+  chatCompletion = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent }
+    ],
+    temperature: 0.7,
+    max_tokens: 500
+  });
+}
+
+const botResponse = chatCompletion.choices[0].message.content;
+console.log('응답 전송 중...');
+
   }
+=======
+      // 한국어인 경우 기존 로직 유지
+      const chatCompletion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...conversation.map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.text
+          })),
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      });
+      
+      botResponse = chatCompletion.choices[0].message.content;
+    }
+
+    // 응답 반환
+>>>>>>> mmvp_back
     res.status(200).json({
       success: true,
       response: botResponse,
       sources: searchResults.map(item => item.metadata.source),
       relevantLinks: relevantLinks
     });
-    console.log('응답 전송 완료');
+
   } catch (error) {
     console.error('챗봇 응답 생성 오류:', error);
     res.status(500).json({
@@ -835,84 +861,6 @@ ${conversationHistory ? `대화 이력:\n${conversationHistory}\n\n` : ''}
 });
 
 //대화 요약 생성 API
-/**
- * @swagger
- * /api/summarize-conversation:
- *   post:
- *     summary: Summarize conversation
- *     description: Analyzes a conversation between a parent and the chatbot and generates a summary with key points and topic.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               conversation:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     sender:
- *                       type: string
- *                     text:
- *                       type: string
- *                     links:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           title:
- *                             type: string
- *                           url:
- *                             type: string
- *                 description: Conversation history with the chatbot
- *               studentInfo:
- *                 type: object
- *                 properties:
- *                   grade:
- *                     type: integer
- *                   class:
- *                     type: integer
- *                   name:
- *                     type: string
- *                 description: Student information
- *     responses:
- *       200:
- *         description: Conversation successfully summarized
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 summary:
- *                   type: object
- *                   properties:
- *                     topic:
- *                       type: string
- *                       description: The main topic of the conversation
- *                     keyPoints:
- *                       type: array
- *                       items:
- *                         type: string
- *                       description: Key discussion points from the conversation
- *                     links:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           title:
- *                             type: string
- *                           url:
- *                             type: string
- *                       description: Relevant links extracted from the conversation
- *       400:
- *         description: Invalid request due to missing or malformed data
- *       500:
- *         description: Internal server error
- */
 app.post('/api/summarize-conversation', async (req, res) => {
   try {
     const { conversation, studentInfo } = req.body;
@@ -998,23 +946,20 @@ const saveConversationToMD = async (studentInfo, conversation, status, requestTy
   try {
     console.log('마크다운 저장 시작...');
     
-    // 디렉토리 확인 및 생성
-    [CONVERSATIONS_DIR, IMAGES_DIR].forEach(dir => {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    });
-
+    // 타임스탬프와 기본 파일명 형식 생성
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `${studentInfo.grade}학년_${studentInfo.class}반_${studentInfo.name}_${timestamp}.md`;
-    const filePath = path.join(CONVERSATIONS_DIR, fileName);
+    const baseFileName = `${studentInfo.grade}학년_${studentInfo.class}반_${studentInfo.name}_${timestamp}`;
     
+    // 마크다운 파일명 및 경로
+    const mdFileName = `${baseFileName}.md`;
+    const mdFilePath = path.join(CONVERSATIONS_DIR, mdFileName);
+
     // 마크다운 내용 생성
     let mdContent = `# 학부모 상담 기록\n\n`;
     mdContent += `## 학생 정보\n\n`;
     mdContent += `- 학년/반: ${studentInfo.grade}학년 ${studentInfo.class}반\n`;
     mdContent += `- 학생 이름: ${studentInfo.name}\n`;
-    mdContent += `- 선생님 이메일: ${studentInfo.teacherEmail || '정보 없음'}\n\n`;
+    mdContent += `- 수신인 이메일: ${studentInfo.parentEmail || '정보 없음'}\n\n`;
     
     mdContent += `## 상담 정보\n\n`;
     mdContent += `- 상담 일시: ${new Date().toLocaleString('ko-KR')}\n`;
@@ -1023,43 +968,48 @@ const saveConversationToMD = async (studentInfo, conversation, status, requestTy
     
     mdContent += `## 대화 내용\n\n`;
     
-    // 이미지 저장 결과 추적
+    // 이미지 저장 및 마크다운에 이미지 링크 추가
     const savedImages = [];
-    
-    // 대화 내용 및 이미지 처리
-    for (const [index, msg] of conversation.entries()) {
-      const sender = msg.sender === 'user' ? '👨‍👩‍👧‍👦 학부모' : '👩‍🏫 민지 선생님';
-      mdContent += `### ${sender} (${index + 1})\n\n${msg.text}\n\n`;
+    for (const [msgIndex, msg] of conversation.entries()) {
+      // 발신자 이모지와 역할 설정
+      const sender = msg.sender === 'user' ? '👨‍👩‍👧‍👦 학부모님' : '👩‍🏫 민지 선생님';
       
-      if (msg.images && Array.isArray(msg.images) && msg.images.length > 0) {
-        mdContent += `**첨부 이미지:**\n\n`;
-        
-        // for (const [imgIndex, image] of msg.images.entries()) {
-        //   const imgFileName = `${studentInfo.grade}학년_${studentInfo.class}반_${studentInfo.name}_${timestamp}_msg${index}_img${imgIndex}${getImageExtension(image)}`;
-        //   try {
-        //     const savedPath = await saveImage(image, imgFileName);
-        //     if (savedPath) {
-        //       mdContent += `![이미지 ${imgIndex + 1}](../images/${imgFileName})\n\n`;
-        //       savedImages.push({ path: savedPath, name: imgFileName });
-        //     }
-        //   } catch (imgError) {
-        //     console.warn(`이미지 저장 실패 (${imgFileName}):`, imgError);
-        //   }
-        // }
+      // 각 메시지 추가 (빈 메시지 제외)
+      if (msg.text && msg.text.trim()) {
+        mdContent += `### ${sender} (${msgIndex + 1})\n\n${msg.text.trim()}\n\n`;
+      }
+      
+      // 이미지 처리
+      if (msg.images && Array.isArray(msg.images)) {
+        for (const [imgIndex, image] of msg.images.entries()) {
+          const imgFileName = `${baseFileName}_img${String(msgIndex+1).padStart(2, '0')}${String(imgIndex+1).padStart(2, '0')}${getImageExtension(image)}`;
+          const imgFilePath = path.join(IMAGES_DIR, imgFileName);
+          
+          try {
+            if (image.data) {
+              const base64Data = image.data.replace(/^data:image\/\w+;base64,/, '');
+              await fs.promises.writeFile(imgFilePath, Buffer.from(base64Data, 'base64'));
+              savedImages.push({ path: imgFilePath, name: imgFileName });
+              mdContent += `![이미지 ${msgIndex+1}-${imgIndex+1}](../images/${imgFileName})\n\n`;
+            }
+          } catch (imgError) {
+            console.error(`이미지 저장 실패 (${imgFileName}):`, imgError);
+          }
+        }
       }
     }
 
     // 마크다운 파일 저장
-    await fs.promises.writeFile(filePath, mdContent, 'utf8');
-    console.log(`마크다운 파일 저장 완료: ${filePath}`);
+    await fs.promises.writeFile(mdFilePath, mdContent, 'utf8');
 
     return {
-      filePath,
-      savedImages: [] // 이미지 저장 결과를 여기에 추가
+      filePath: mdFilePath,
+      fileName: mdFileName,
+      savedImages: savedImages
     };
   } catch (error) {
     console.error('마크다운 저장 오류:', error);
-    throw error; // 오류를 상위로 전파
+    throw error;
   }
 };
 
@@ -1072,114 +1022,48 @@ function getImageExtension(image) {
   return '.jpg';
 }
 
-// 이미지 저장 함수
-const saveImage = async (image, fileName) => {
+// 이미지 저장 함수 수정
+const saveImage = async (imageData, fileName) => {
   try {
-    if (!image || !image.data) {
-      console.log('이미지 데이터 없음:', image);
-      return null;
+    if (!imageData) {
+      throw new Error('이미지 데이터가 없습니다.');
     }
-    
+
+    // IMAGES_DIR이 존재하는지 확인하고 없으면 생성
+    if (!fs.existsSync(IMAGES_DIR)) {
+      await fs.promises.mkdir(IMAGES_DIR, { recursive: true });
+    }
+
     const filePath = path.join(IMAGES_DIR, fileName);
-    console.log(`이미지 저장 시도: ${filePath}`);
     
-    if (typeof image.data === 'string' && image.data.startsWith('data:')) {
-      const base64Data = image.data.replace(/^data:image\/\w+;base64,/, '');
-      await fs.promises.writeFile(filePath, Buffer.from(base64Data, 'base64'));
-      console.log(`이미지 저장 완료 (Base64): ${filePath}`);
-      return filePath;
-    } else if (Buffer.isBuffer(image.data)) {
-      await fs.promises.writeFile(filePath, image.data);
-      console.log(`이미지 저장 완료 (Buffer): ${filePath}`);
-      return filePath;
-    } else {
-      console.error('지원되지 않는 이미지 데이터 형식:', typeof image.data);
-      return null;
+    // Base64 이미지 데이터 처리
+    if (typeof imageData === 'string' && imageData.startsWith('data:image')) {
+      const matches = imageData.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const buffer = Buffer.from(matches[2], 'base64');
+        await fs.promises.writeFile(filePath, buffer);
+        console.log('이미지 저장 성공:', filePath);
+        return filePath;
+      }
     }
+
+    throw new Error('지원되지 않는 이미지 형식입니다.');
   } catch (error) {
     console.error('이미지 저장 오류:', error);
-    return null;
+    throw error;
   }
 };
 
 // 이메일 발송 API 수정
-/**
- * @swagger
- * /api/send-email:
- *   post:
- *     summary: Send email with conversation details and attachments
- *     description: Sends an email to the teacher and optionally to the parent regarding a student's inquiry. Includes conversation details and any uploaded images as attachments.
- *     consumes:
- *       - multipart/form-data
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               studentInfo:
- *                 type: string
- *                 description: JSON string containing student details (grade, class, name) ex) { "grade": 3, "class": 2, "name": "김철수" }
- *               conversation:
- *                 type: string
- *                 description: JSON string containing conversation history ex) [{ "sender": "user", "text": "오늘 울 애기 점심 메뉴는 뭔가요?" }, { "sender": "user", "text": "근데 저희 집은 급식비 낼 돈이 없어요ㅠㅠ" }]
- *               status:
- *                 type: string
- *                 description: Inquiry status ([해결], [미해결], [확인 부탁])
- *               requestType:
- *                 type: string
- *                 description: Type of request made by the parent ([면담 요청], [전화 상담 요청], [문제 해결])
- *               summary:
- *                 type: string
- *                 description: JSON string containing conversation summary (topic, keyPoints) ex) {"topic":"topic", "keyPoints": ["keyPoints1", "keyPoints2"]}
- *               teacherEmail:
- *                 type: string
- *                 description: Parent's email address (optional)
- *               images:
- *                 type: array
- *                 items:
- *                   type: string
- *                   format: binary
- *                 description: Images related to the inquiry (optional) (max 10 images)
- *     responses:
- *       200:
- *         description: Email successfully sent
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 messageId:
- *                   type: string
- *                   description: ID of the sent email
- *                 savedPath:
- *                   type: string
- *                   description: Path where the conversation details were saved
- *       400:
- *         description: Invalid request due to missing or malformed data
- *       500:
- *         description: Internal server error
- */
-app.post('/api/send-email', upload.array('images', 10), async (req, res) => {
+app.post('/api/send-email', upload.array('images'), async (req, res) => {
   try {
-    const { studentInfo, conversation, status, requestType, summary, teacherEmail } = req.body;
+    console.log('이메일 전송 API 호출됨');
+    
+    const { studentInfo, conversation, status, requestType, summary, parentEmail } = req.body;
     const parsedStudentInfo = JSON.parse(studentInfo);
     const parsedConversation = JSON.parse(conversation);
     const parsedSummary = JSON.parse(summary);
     
-    // 대화 내용 저장
-    const savedConversation = await saveConversationToMD(
-      parsedStudentInfo,
-      parsedConversation,
-      status,
-      requestType
-    );
-
     // 이메일 본문 생성
     const emailBody = `
 ${parsedStudentInfo.grade}학년 ${parsedStudentInfo.class}반 ${parsedStudentInfo.name} 학생 관련 문의입니다.
@@ -1192,143 +1076,123 @@ ${parsedStudentInfo.grade}학년 ${parsedStudentInfo.class}반 ${parsedStudentIn
 주요 논의사항:
 ${parsedSummary.keyPoints.map(point => `- ${point}`).join('\n')}
 
-대화 내용이 첨부된 파일에 저장되었습니다.
+대화 내용:
+${parsedConversation.map(msg => 
+  `${msg.sender === 'user' ? '학부모' : '챗봇'}: ${msg.text}`
+).join('\n\n')}
 `;
+    
+    const attachments = [];
+    
+    // 이미지 처리 함수
+    const processImage = async (imageData, originalName) => {
+      try {
+        let imageBuffer;
+        
+        if (imageData.startsWith('data:image')) {
+          const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+          imageBuffer = Buffer.from(base64Data, 'base64');
+        } else {
+          imageBuffer = Buffer.from(imageData, 'base64');
+        }
 
+        // 파일 확장자 결정
+        const mimeType = imageData.startsWith('data:image') 
+          ? imageData.split(';')[0].split('/')[1]
+          : mime.getExtension(originalName) || 'jpg';
+        
+        // UUID를 사용한 고유한 파일명 생성
+        const fileName = `${uuidv4()}.${mimeType}`;
+        const filePath = path.join(IMAGES_DIR, fileName);
+
+        // sharp를 사용한 이미지 최적화
+        await sharp(imageBuffer)
+          .resize(1200, 1200, { // 최대 크기 제한
+            fit: 'inside',
+            withoutEnlargement: true
+          })
+          .jpeg({ quality: 80 }) // JPEG 품질 조정
+          .toFile(filePath);
+
+        return {
+          filename: fileName,
+          path: filePath
+        };
+      } catch (error) {
+        console.error('이미지 처리 오류:', error);
+        return null;
+      }
+    };
+
+    // 대화 내 이미지 처리
+    console.log('대화에서 이미지 추출 중...');
+    
+    for (const msg of parsedConversation) {
+      if (msg.images && Array.isArray(msg.images) && msg.images.length > 0) {
+        console.log(`메시지에서 ${msg.images.length}개 이미지 발견`);
+        
+        for (const image of msg.images) {
+          try {
+            if (image.data) {
+              const processedImage = await processImage(image.data, image.name);
+              if (processedImage) {
+                attachments.push(processedImage);
+                console.log(`이미지 처리 성공: ${processedImage.filename}`);
+              }
+            }
+          } catch (imgError) {
+            console.error('이미지 처리 오류:', imgError);
+          }
+        }
+      }
+    }
+    
+    console.log(`총 ${attachments.length}개 이미지 첨부 준비 완료`);
+    
     // 이메일 옵션 설정
     const mailOptions = {
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: process.env.EMAIL_USER,
-      cc: teacherEmail,
+      cc: parentEmail,
       subject: `[이도초등학교] ${parsedStudentInfo.grade}학년 ${parsedStudentInfo.class}반 ${parsedStudentInfo.name} 학부모님 문의(${status})(${requestType})`,
       text: emailBody,
-      attachments: []
+      attachments: attachments
     };
-
-    // 저장된 마크다운 파일 첨부
-    if (savedConversation && savedConversation.filePath) {
-      mailOptions.attachments.push({
-        filename: path.basename(savedConversation.filePath),
-        path: savedConversation.filePath
-      });
-    }
-
-    // 이미지 첨부
-  const imagePaths = req.files && req.files.length > 0 ? req.files.map(file => ({
-    filename: file.originalname,
-    path: file.path
-  })) : [];
-
-  console.log("imagePaths:", imagePaths);
-
-  // 📌 파일이 있을 경우만 attachments에 추가
-  if (imagePaths.length > 0) {
-    mailOptions.attachments.push(...imagePaths);
-  }
-
-      
-    // if (savedConversation && savedConversation.savedImages) {
-    //   savedConversation.savedImages.forEach(img => {
-    //     mailOptions.attachments.push({
-    //       filename: path.basename(img.path),
-    //       path: img.path
-    //     });
-    //   });
-    // }
-
+    
     // 이메일 발송
-    try {
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: parseInt(process.env.EMAIL_PORT || '587'),
-        secure: process.env.EMAIL_SECURE === 'true',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        },
-        debug: true // 디버깅 활성화
-      });
-
-      // SMTP 연결 테스트
-      await transporter.verify();
-      console.log('SMTP 서버 연결 성공');
-
-      // 이메일 발송
-      const info = await transporter.sendMail(mailOptions);
-      console.log('이메일 전송 완료:', info.messageId);
-
-      res.status(200).json({
-        success: true,
-        message: '교사와 학부모에게 이메일이 성공적으로 전송되었습니다.',
-        messageId: info.messageId,
-        savedPath: savedConversation.filePath
-      });
-    } catch (error) {
-      console.error('이메일 전송 오류:', error);
-      throw new Error(`이메일 전송 실패: ${error.message}`);
-    }
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: process.env.EMAIL_SECURE === 'true',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      },
+      debug: true
+    });
+    
+    await transporter.verify();
+    console.log('SMTP 서버 연결 성공');
+    
+    const info = await transporter.sendMail(mailOptions);
+    console.log('이메일 전송 완료:', info.messageId);
+    
+    res.status(200).json({
+      success: true,
+      message: '교사와 학부모에게 이메일이 성공적으로 전송되었습니다.',
+      messageId: info.messageId,
+      attachmentsCount: attachments.length
+    });
   } catch (error) {
     console.error('이메일 처리 오류:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: '이메일 처리 중 오류가 발생했습니다.',
-      details: error.message
+      error: '이메일 처리 중 오류가 발생했습니다: ' + error.message
     });
   }
 });
 
 // 대화 상태 분류 API - 이어서
-/**
- * @swagger
- * /api/classify-conversation:
- *   post:
- *     summary: Classify conversation status
- *     description: Analyzes a conversation between a parent and the chatbot and classifies it as resolved, unresolved, or requiring teacher confirmation.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               conversation:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     sender:
- *                       type: string
- *                     text:
- *                       type: string
- *                 description: Conversation history between parent and chatbot
- *               studentInfo:
- *                 type: object
- *                 properties:
- *                   grade:
- *                     type: integer
- *                   class:
- *                     type: integer
- *                   name:
- *                     type: string
- *                 description: Student information
- *     responses:
- *       200:
- *         description: Conversation successfully classified
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 status:
- *                   type: string
- *                   description: Classification result ([해결], [미해결], [확인 부탁])
- *       400:
- *         description: Invalid request due to missing or malformed data
- *       500:
- *         description: Internal server error
- */
 app.post('/api/classify-conversation', async (req, res) => {
   try {
     const { conversation, studentInfo } = req.body;
@@ -1382,6 +1246,61 @@ ${conversationText}
     res.status(500).json({
       success: false,
       error: '대화 분류 중 오류가 발생했습니다: ' + error.message
+    });
+  }
+});
+
+// 분석 엔드포인트 추가
+app.post('/analyze', async (req, res) => {
+  try {
+    const { message, studentInfo, conversation } = req.body;
+    
+    // 기존의 /api/chat 엔드포인트와 동일한 로직 사용
+    if (!message || message.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: '메시지가 비어있습니다.'
+      });
+    }
+
+    // 문서 데이터 확인 및 로드
+    if (documentStore.length === 0) {
+      await loadAllFilesFromDirectory();
+    }
+
+    // 쿼리 임베딩 생성
+    const queryEmbeddingResponse = await openai.embeddings.create({
+      model: "text-embedding-ada-002",
+      input: message,
+    });
+    
+    const queryEmbedding = queryEmbeddingResponse.data[0].embedding;
+    
+    // 관련 문서 검색
+    const searchResults = documentStore
+      .map(doc => ({
+        content: doc.content,
+        metadata: doc.metadata,
+        similarity: calculateCosineSimilarity(queryEmbedding, doc.embedding)
+      }))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 3); // 상위 3개 결과
+    
+    // 관련 링크 찾기
+    const relevantLinks = findRelevantLinks(message, searchResults);
+    
+    // 응답 생성
+    res.status(200).json({
+      success: true,
+      response: botResponse,
+      sources: searchResults.map(item => item.metadata.source),
+      relevantLinks: relevantLinks
+    });
+  } catch (error) {
+    console.error('분석 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '분석 중 오류가 발생했습니다: ' + error.message
     });
   }
 });
