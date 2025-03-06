@@ -274,32 +274,32 @@ async function loadAllFilesFromDirectory() {
         
         // 각 청크에 대한 임베딩 생성
         //test
-        // for (let i = 0; i < chunks.length; i++) {
-        //   try {
-        //     console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
+        for (let i = 0; i < chunks.length; i++) {
+          try {
+            console.log(`${filename} 청크 ${i+1}/${chunks.length} 처리 중... (길이: ${chunks[i].length}자)`);
             
-        //     const embeddingResponse = await openai.embeddings.create({
-        //       model: "text-embedding-ada-002",
-        //       input: chunks[i],
-        //     });
+            const embeddingResponse = await openai.embeddings.create({
+              model: "text-embedding-ada-002",
+              input: chunks[i],
+            });
             
-        //     // 문서 저장소에 저장
-        //     documentStore.push({
-        //       content: chunks[i],
-        //       embedding: embeddingResponse.data[0].embedding,
-        //       metadata: {
-        //         source: filename,
-        //         chunkIndex: i,
-        //         totalChunks: chunks.length,
-        //         fileType: 'txt'
-        //       }
-        //     });
+            // 문서 저장소에 저장
+            documentStore.push({
+              content: chunks[i],
+              embedding: embeddingResponse.data[0].embedding,
+              metadata: {
+                source: filename,
+                chunkIndex: i,
+                totalChunks: chunks.length,
+                fileType: 'txt'
+              }
+            });
             
-        //     console.log(`${filename} 청크 ${i+1}/${chunks.length} 임베딩 완료`);
-        //   } catch (embeddingError) {
-        //     console.error(`청크 임베딩 오류 (${filename}, 청크 ${i}):`, embeddingError);
-        //   }
-        // }
+            console.log(`${filename} 청크 ${i+1}/${chunks.length} 임베딩 완료`);
+          } catch (embeddingError) {
+            console.error(`청크 임베딩 오류 (${filename}, 청크 ${i}):`, embeddingError);
+          }
+        }
         
         loadedFiles++;
         console.log(`${filename} 처리 완료`);
